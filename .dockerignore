@@ -1,0 +1,14 @@
+.git
+.gitignore
+.venv
+venv
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.env
+.streamlit/secrets.toml
+.pytest_cache
+.ipynb_checkpoints
+rag/vectorstore/faiss_index_tmp/
+scratch/
