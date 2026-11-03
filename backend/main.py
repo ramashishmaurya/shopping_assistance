@@ -11,6 +11,7 @@ Exposes REST endpoints for:
 import logging
 import math
 import os
+import re
 import uuid
 from contextlib import asynccontextmanager
 from typing import Any, Dict, List, Optional, Union
@@ -43,6 +44,14 @@ from rag.retrieval.product_retriever import ProductRetriever
 from rag.vectorstore.faiss_manager import FaissManager
 from utils.helpers import file_fingerprint
 from backend.agents import ProductAnalyzerAgent, ProductComparatorAgent, ShoppingAdvisorAgent
+from backend.database import (
+    init_db,
+    search_products_tool,
+    filter_products_tool,
+    get_product_by_id_tool,
+    compare_products_tool,
+)
+from backend.database.seed import seed_database
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 logger = logging.getLogger("backend")
@@ -97,6 +106,14 @@ async def lifespan(app: FastAPI):
     PIPELINE["analyzer"] = analyzer
     PIPELINE["comparator"] = comparator
     PIPELINE["advisor"] = advisor
+
+    # Initialize PostgreSQL / Multi-database engine & seed
+    try:
+        init_db()
+        seed_database()
+    except Exception as e:
+        logger.warning("Database init notice: %s", e)
+
     logger.info("Shopping Assistant backend initialized with %d products.", len(df))
     yield
     PIPELINE.clear()
@@ -326,11 +343,21 @@ def chat(req: ChatRequest):
     # Gather matching product cards
     products = [serialize_product(df.loc[pid]) for pid in response.product_ids if pid in df.index]
 
+    # Enforce exact user limit request (e.g., "top 3", "top three", "show 2", "5 options")
+    num_words = {"one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6, "seven": 7, "eight": 8, "nine": 9, "ten": 10}
+    num_match = re.search(r"\b(?:top|show|give me|only|best|first)\s+(\d+|one|two|three|four|five|six|seven|eight|nine|ten)\b", req.message, re.IGNORECASE) or \
+                re.search(r"\b(\d+|one|two|three|four|five|six|seven|eight|nine|ten)\s+(?:items|products|options|shoes|shirts|phones|tvs|watches|best)\b", req.message, re.IGNORECASE)
+    if num_match:
+        raw_val = num_match.group(1).lower()
+        limit_count = num_words.get(raw_val, int(raw_val) if raw_val.isdigit() else None)
+        if limit_count and 1 <= limit_count <= 20:
+            products = products[:limit_count]
+
     return {
         "session_id": session_id,
         "text": response.text,
         "kind": response.kind,
-        "product_ids": response.product_ids,
+        "product_ids": [p["product_id"] for p in products],
         "products": products,
         "category_options": response.category_options,
         "compare_ids": response.compare_ids,
@@ -341,6 +368,59 @@ def chat(req: ChatRequest):
             "total_count": sum(cart.items.values()),
         },
     }
+
+
+# --------------------------------------------------------------------------- PostgreSQL Agent Tools Endpoints
+@app.get("/api/db/search")
+def db_search(query: str, limit: int = Query(3, ge=1, le=50), bind: str = "default"):
+    """Tool: Search PostgreSQL database directly with exact limit."""
+    return {
+        "query": query,
+        "limit": limit,
+        "bind": bind,
+        "products": search_products_tool(query=query, limit=limit, bind=bind)
+    }
+
+
+@app.get("/api/db/filter")
+def db_filter(
+    category: Optional[str] = None,
+    subcategory: Optional[str] = None,
+    brand: Optional[str] = None,
+    min_price: Optional[float] = None,
+    max_price: Optional[float] = None,
+    min_rating: Optional[float] = None,
+    in_stock_only: bool = True,
+    sort_by: str = "rating_desc",
+    limit: int = Query(3, ge=1, le=50),
+    bind: str = "default"
+):
+    """Tool: Filter PostgreSQL database with exact criteria and exact limit."""
+    return {
+        "limit": limit,
+        "bind": bind,
+        "products": filter_products_tool(
+            category=category,
+            subcategory=subcategory,
+            brand=brand,
+            min_price=min_price,
+            max_price=max_price,
+            min_rating=min_rating,
+            in_stock_only=in_stock_only,
+            sort_by=sort_by,
+            limit=limit,
+            bind=bind
+        )
+    }
+
+
+@app.get("/api/db/products/{product_id}")
+def db_get_product(product_id: str, bind: str = "default"):
+    """Tool: Get single product directly from PostgreSQL."""
+    prod = get_product_by_id_tool(product_id=product_id, bind=bind)
+    if not prod:
+        raise HTTPException(status_code=404, detail="Product not found in database")
+    return prod
 
 
 @app.post("/api/analyze-product")
