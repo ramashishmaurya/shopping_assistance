@@ -40,11 +40,11 @@ def format_price(value) -> str:
 
 
 def file_fingerprint(path: Path) -> str:
-    """MD5 of the file contents; used to detect dataset changes."""
+    """MD5 of the file contents (normalized to LF so Windows/Linux checkout differences don't mismatch)."""
     digest = hashlib.md5()
     with open(path, "rb") as handle:
         for chunk in iter(lambda: handle.read(1 << 20), b""):
-            digest.update(chunk)
+            digest.update(chunk.replace(b"\r\n", b"\n"))
     return digest.hexdigest()
 
 
