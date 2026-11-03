@@ -342,8 +342,7 @@ class IntentDetector:
             f.sort_by = "price_asc"
         elif cheap:
             f.sort_by = "price_asc"
-            f.budget = not f.has_price()   # an explicit price beats the vague "cheap"
-        found, text = self._take(r"\b(most expensive|costliest|priciest|high to low|premium|luxury|high[- ]end|top[- ]end)\b", text)
+        found, text = self._take(r"\b(high[- ]?expensive|most expensive|expensive|costliest|costly|priciest|high to low|premium|luxury|high[- ]end|top[- ]end)\b", text)
         if found:
             f.sort_by, f.budget = "price_desc", False
         found, text = self._take(r"\b(most popular|popular|bestsell(?:er|ers|ing)|trending|most reviewed)\b", text)
