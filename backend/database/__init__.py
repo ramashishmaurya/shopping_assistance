@@ -11,6 +11,8 @@ from .tools import (
     get_product_by_id_tool,
     compare_products_tool,
     get_top_rated_tool,
+    list_products_tool,
+    get_categories_tool,
 )
 
 __all__ = [
@@ -25,4 +27,6 @@ __all__ = [
     "get_product_by_id_tool",
     "compare_products_tool",
     "get_top_rated_tool",
+    "list_products_tool",
+    "get_categories_tool",
 ]

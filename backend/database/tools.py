@@ -155,3 +155,91 @@ def get_top_rated_tool(
 ) -> List[Dict[str, Any]]:
     """Tool: Fetches the top-rated products in a category with exact limit."""
     return filter_products_tool(category=category, sort_by="rating_desc", limit=limit, bind=bind)
+
+
+def list_products_tool(
+    category: Optional[str] = None,
+    subcategory: Optional[str] = None,
+    brand: Optional[str] = None,
+    min_price: Optional[float] = None,
+    max_price: Optional[float] = None,
+    min_rating: Optional[float] = None,
+    in_stock_only: bool = False,
+    sort_by: Optional[str] = None,
+    page: int = 1,
+    page_size: int = 12,
+    bind: str = "default"
+) -> Dict[str, Any]:
+    """Tool: Returns paginated products direct from PostgreSQL database."""
+    session = get_session(bind)
+    try:
+        query = session.query(Product)
+        if category:
+            query = query.filter(Product.category.ilike(category.strip()))
+        if subcategory:
+            query = query.filter(Product.subcategory.ilike(subcategory.strip()))
+        if brand:
+            query = query.filter(Product.brand.ilike(brand.strip()))
+        if min_price is not None:
+            query = query.filter(Product.sale_price >= min_price)
+        if max_price is not None:
+            query = query.filter(Product.sale_price <= max_price)
+        if min_rating is not None:
+            query = query.filter(Product.rating >= min_rating)
+        if in_stock_only:
+            query = query.filter(Product.in_stock == True, Product.stock_quantity > 0)
+
+        if sort_by == "price_asc":
+            query = query.order_by(asc(Product.sale_price))
+        elif sort_by == "price_desc":
+            query = query.order_by(desc(Product.sale_price))
+        elif sort_by == "discount_desc":
+            query = query.order_by(desc(Product.discount_percent))
+        else:
+            query = query.order_by(desc(Product.rating), desc(Product.review_count))
+
+        total = query.count()
+        offset = (page - 1) * page_size
+        results = query.offset(offset).limit(page_size).all()
+
+        import math
+        return {
+            "total": total,
+            "page": page,
+            "page_size": page_size,
+            "pages": math.ceil(total / page_size) if page_size else 1,
+            "products": [p.to_dict() for p in results],
+        }
+    finally:
+        session.close()
+
+
+def get_categories_tool(bind: str = "default") -> Dict[str, Any]:
+    """Tool: Returns distinct categories, subcategories, brands from PostgreSQL."""
+    session = get_session(bind)
+    try:
+        from sqlalchemy import func
+        rows = (
+            session.query(Product.category, Product.subcategory, func.count(Product.product_id))
+            .group_by(Product.category, Product.subcategory)
+            .all()
+        )
+        cats = {}
+        for cat, sub, cnt in rows:
+            if cat not in cats:
+                cats[cat] = {"count": 0, "subcategories": []}
+            cats[cat]["count"] += cnt
+            cats[cat]["subcategories"].append({"name": sub, "count": cnt})
+
+        brands = [b[0] for b in session.query(Product.brand).distinct().order_by(Product.brand).all()]
+        min_p = session.query(func.min(Product.sale_price)).scalar() or 0.0
+        max_p = session.query(func.max(Product.sale_price)).scalar() or 80000.0
+
+        return {
+            "categories": cats,
+            "brands": brands,
+            "price_min": float(min_p),
+            "price_max": float(max_p),
+        }
+    finally:
+        session.close()
