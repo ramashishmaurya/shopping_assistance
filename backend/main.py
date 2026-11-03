@@ -343,15 +343,19 @@ def chat(req: ChatRequest):
     # Gather matching product cards
     products = [serialize_product(df.loc[pid]) for pid in response.product_ids if pid in df.index]
 
-    # Enforce exact user limit request (e.g., "top 3", "top three", "show 2", "5 options")
-    num_words = {"one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6, "seven": 7, "eight": 8, "nine": 9, "ten": 10}
-    num_match = re.search(r"\b(?:top|show|give me|only|best|first)\s+(\d+|one|two|three|four|five|six|seven|eight|nine|ten)\b", req.message, re.IGNORECASE) or \
-                re.search(r"\b(\d+|one|two|three|four|five|six|seven|eight|nine|ten)\s+(?:items|products|options|shoes|shirts|phones|tvs|watches|best)\b", req.message, re.IGNORECASE)
-    if num_match:
-        raw_val = num_match.group(1).lower()
-        limit_count = num_words.get(raw_val, int(raw_val) if raw_val.isdigit() else None)
-        if limit_count and 1 <= limit_count <= 20:
-            products = products[:limit_count]
+    # Enforce exact user limit request via ShoppingAdvisorAgent (e.g., "give me 5 phone", "top 3", "2 best shirts")
+    advisor: ShoppingAdvisorAgent = PIPELINE.get("advisor")
+    limit_count = advisor.extract_requested_limit(req.message) if advisor else None
+
+    if limit_count and 1 <= limit_count <= 50:
+        products = products[:limit_count]
+        if response.text:
+            response.text = re.sub(
+                r"Here are \d+ (?:matching )?products",
+                f"Here are the top {len(products)} matching products",
+                response.text,
+                flags=re.IGNORECASE
+            )
 
     return {
         "session_id": session_id,
