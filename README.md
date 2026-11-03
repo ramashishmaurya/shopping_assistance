@@ -1,184 +1,162 @@
-# AI Shopping Assistant
+# 🛍️ ShopMind AI — Grounded Shopping Assistant & Chrome Copilot
 
-A chatbot for an online store. You type what you want in normal words, for example
-*"black running shoes under ₹3,000"*, and it shows you matching products from a catalog
-of **1,000 products**. It can also compare products and add them to a cart.
-
-It is built with **RAG** (Retrieval-Augmented Generation):
-
-1. **Retrieve**: find the right products in the catalog.
-2. **Augment**: give those products to an AI model.
-3. **Generate**: the AI writes a short, friendly reply about them.
-
-**Main rule of this project:** the search decides which products are shown. The AI only
-describes them, and the app checks that the AI did not invent any product, price or other detail.
+A full-stack, enterprise-grade AI Shopping Assistant powered by **Retrieval-Augmented Generation (RAG)**, **FAISS Vector Search**, and **Groq/OpenAI LLMs**. Features a decoupled high-performance **FastAPI Backend**, a stunning **Vanilla HTML/CSS Frontend** for Vercel, and a **Google Chrome Extension (Side Panel)** for live e-commerce stores (Amazon, Flipkart, etc.).
 
 ---
 
-## What you can do
+## 🏛️ System Architecture
 
-| Try typing | What happens |
-|---|---|
-| `show me boots` | Shows all boots in the catalog |
-| `cloth under 200` | Shows only clothing that costs less than ₹200 |
-| `comfortable shoes for jogging` | Understands the meaning and shows running shoes |
-| `laptops between 30k and 50k` | Shows laptops priced from ₹30,000 to ₹50,000 |
-| `black or blue shirts under 1000 sort by price low to high` | Several filters together, plus sorting |
-| `KitchenCraft Urban Storage` | Shows only that exact product |
-| `I want to buy this product` | Asks for size and colour, then adds it to the cart |
-| `compare the top 3` | Shows a comparison table |
-| `pen` | Says *"we don't currently carry pen"* (the store doesn't sell pens) |
+```text
+ ┌─────────────────────────────────────────────────────────────────────────────┐
+ │                                CLIENT APPS                                  │
+ ├──────────────────────────────────────┬──────────────────────────────────────┤
+ │  🌐 Web App (Vercel)                 │  🧩 Chrome Extension (Side Panel)    │
+ │  • Pure Vanilla HTML5/CSS3/JS        │  • Live Amazon/Flipkart scraping     │
+ │  • Persistent localStorage Cart      │  • AI Deal Score & Sentiment Review  │
+ │  • Product Search & Comparison       │  • Contextual "Ask About Product"    │
+ └───────────────────┬──────────────────┴───────────────────┬──────────────────┘
+                     │                                      │
+                     │          REST API (HTTP / JSON)      │
+                     ▼                                      ▼
+ ┌─────────────────────────────────────────────────────────────────────────────┐
+ │                         FASTAPI BACKEND (Uvicorn / Docker)                  │
+ │                                                                             │
+ │  /api/health       /api/products       /api/compare                         │
+ │  /api/categories   /api/chat           /api/analyze-product                 │
+ └──────────────────────────────────────┬──────────────────────────────────────┘
+                                        │
+                                        ▼
+ ┌─────────────────────────────────────────────────────────────────────────────┐
+ │                            RAG INTELLIGENCE ENGINE                          │
+ │                                                                             │
+ │  1. Intent Detector     Rule-based & semantic query parser                  │
+ │  2. SentenceTransformer all-MiniLM-L6-v2 (384-dimensional cosine vectors)   │
+ │  3. FAISS Vectorstore   Index of 1,000 pre-embedded catalog items           │
+ │  4. Strict Filtering    Pandas price bounds, size, color, stock filters     │
+ │  5. LLM Synthesis       Groq (GPT-OSS-120B) or OpenAI with guardrails       │
+ └─────────────────────────────────────────────────────────────────────────────┘
+```
 
 ---
 
-## How to run it
+## 📂 Project Directory Structure
 
-You need **Python 3.11**.
+```text
+vish-task-shopping-assistant/
+│
+├── frontend/                          ✨ Vercel Static Frontend
+│   ├── index.html                     # Semantic HTML5 UI with mobile-first grid
+│   ├── style.css                      # Modern Vanilla CSS (Glassmorphism & Dark Mode)
+│   ├── app.js                         # State store, localStorage Cart, Chat & Modals
+│   ├── vercel.json                    # Vercel deployment & security headers
+│   └── README.md                      # Frontend documentation & design guide
+│
+├── backend/                           ⚡ FastAPI Async REST Backend
+│   ├── __init__.py
+│   ├── main.py                        # REST routes (/api/chat, /api/products, etc.)
+│   └── README.md                      # API reference & endpoint guide
+│
+├── extension/                         🛍️ Google Chrome Extension (Manifest V3)
+│   ├── manifest.json                  # Manifest V3 (sidePanel, activeTab permissions)
+│   ├── background.js                  # Service worker handling side panel activation
+│   ├── content.js                     # Amazon & Flipkart product/review DOM extractor
+│   ├── sidepanel.html                 # AI Copilot UI layout
+│   ├── sidepanel.css                  # Sidepanel stylesheet
+│   ├── sidepanel.js                   # Client controller & API integration
+│   ├── icons/                         # 16px, 48px, 128px extension icons
+│   └── README.md                      # Chrome installation guide
+│
+├── rag/                               🧠 Core Retrieval-Augmented Generation Engine
+│   ├── ingestion/                     # Dataset cleaning, type coercion & validation
+│   ├── embeddings/                    # HuggingFace sentence-transformers embeddings
+│   ├── vectorstore/                   # FAISS index storage & cross-platform loader
+│   ├── retrieval/                     # Semantic search, filter pipelines & ranker
+│   └── llm/                           # LLM factory (Groq / OpenAI) & prompt guards
+│
+├── chatbot/                           💬 Dialogue & Intent Processing
+│   ├── conversation_manager.py        # Multi-turn conversational context
+│   ├── intent_detector.py             # Vocabulary-driven intent and slot extractor
+│   └── shopping_assistant.py          # Master response orchestrator
+│
+├── components/                        🛒 Reusable Logic Components
+│   ├── shopping_cart.py               # Cart operations, validation & variant tracking
+│   ├── product_cards.py               # Comparison frames & card HTML formatters
+│   └── category_buttons.py
+│
+├── data/                              📂 Catalog Dataset
+│   └── ecommerce_products_1000.csv    # 1,000 verified product rows
+│
+├── utils/                             🛠️ Helpers & Utilities
+│   └── helpers.py                     # Currency formatter & LF-normalized fingerprint
+│
+├── Dockerfile                         🐳 Multi-stage production container
+├── docker-compose.yml                 🐳 One-click Docker container orchestration
+├── .dockerignore                      # Docker ignore rules
+├── requirements.txt                   📦 Python dependencies
+├── config.py                          ⚙️ Global configuration & hyperparameters
+├── .python-version                    # Python 3.11.9 pin for cloud buildpacks
+└── app.py                             🛍️ Legacy Streamlit application (backward compatible)
+```
+
+---
+
+## 🚀 Quickstart Guide
+
+### 1. Run with Docker (Fastest):
+```bash
+docker compose up --build
+```
+Access the application at [http://localhost:8000](http://localhost:8000).
+
+---
+
+### 2. Run Manually (Local Setup):
+
+#### Prerequisites:
+- Python 3.11 (`py -3.11` or via `uv`)
 
 ```powershell
-# 1. Go to the project folder
-cd vish_task
-
-# 2. Create and turn on a virtual environment
+# 1. Create and activate virtual environment
 py -3.11 -m venv .venv
 .venv\Scripts\activate
 
-# 3. Install the libraries
+# 2. Install dependencies
 pip install -r requirements.txt
 
-# 4. Start the app
-python -m streamlit run app.py
+# 3. Start the FastAPI backend
+uvicorn backend.main:app --host 127.0.0.1 --port 8000 --reload
 ```
 
-The app opens in your browser at `http://localhost:8501`.
-
-**First start takes about 1 minute.** The app downloads the embedding model and builds the
-search index. After that, it starts in a few seconds.
-
-### AI replies (optional)
-
-The app works **without any API key**: search, filters, product cards and the cart all work,
-and the replies come from a simple template.
-
-To get AI-written replies, create a file named `.env` in the project folder with one or both keys:
-
-```
-GROQ_API_KEY=your_groq_key
-OPENAI_API_KEY=your_openai_key
-```
-
-Or paste a key in the sidebar while the app is running.
-
-- **Free mode** uses Groq.
-- **Paid mode** uses OpenAI.
-
-Both modes use the same search; only the AI model changes.
+- **Backend API:** [http://127.0.0.1:8000](http://127.0.0.1:8000)
+- **Interactive Swagger Docs:** [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs)
+- **Frontend App:** Open `frontend/index.html` directly in any browser!
 
 ---
 
-## How it works
-
-```
-                 WHEN THE APP STARTS (once)
-  Product CSV ──► one text per product ──► turned into numbers ──► saved in a FAISS index
-                                          (all-MiniLM-L6-v2)
-
-                 FOR EVERY MESSAGE
-  User message
-     │
-     ▼
-  1. Understand   what the user wants: product type, price, brand, colour, size, rating…
-     │
-     ▼
-  2. Search       find products with a similar meaning (FAISS),
-     │            then apply every filter exactly (e.g. "under ₹200" means less than 200)
-     ▼
-  3. Result       one final list of matching products
-     │
-     ▼
-  4. Reply        a summary of that list (an AI model writes it, if a key is given)
-     │
-     ▼
-  5. Check        every fact in the AI reply is checked against the list;
-     │            if anything is made up, a safe template reply is shown instead
-     ▼
-  6. Show         reply + product cards (with arrows to see every result) + cart
-```
-
-### Important behaviour
-
-- **Filters are strict.**
-  - "under ₹200" means less than 200; "up to ₹200" means 200 or less.
-  - "above" means more than; "at least" means that much or more.
-  - Products that don't match are never shown as matches.
-- **No silent changes.** If nothing matches, the app says *"No matching products found"* and may
-  offer one clearly marked suggestion (for example *"shirts under ₹300?"*). It only applies the
-  suggestion if you click it.
-- **All results are shown.** The carousel shows 3 cards at a time, and the arrows let you see every match.
-- **Each message is a new search.** Filters from earlier messages are not carried over.
-- **Specific products.** If you name an exact product, only that product is shown, with no similar ones.
-- **Size and colour first.** Before adding a product to the cart, the app asks for its size and colour.
-- **Unclear price.** For something like "worth ₹300", the app asks whether you mean
-  "up to", "exactly" or "around" ₹300.
-- **Clear errors.** If the search index can't load, the app shows an error instead of giving wrong results.
-
-### Chunking
-
-There is **no chunking**: each product is one document. A product's text is only about
-80–130 tokens, which fits easily within the embedding model's limit (256 tokens).
-Keeping each product whole means every search result is one complete product.
+### 3. Install the Chrome Extension:
+1. Open Google Chrome and navigate to `chrome://extensions`.
+2. Toggle **Developer mode** ON (top-right).
+3. Click **Load unpacked** (top-left) and select the `extension` folder inside this project.
+4. Open Amazon or Flipkart, click the **ShopMind AI** icon, and explore!
 
 ---
 
-## Project structure
+## ☁️ Deployment
 
-```
-app.py                              Streamlit web app (chat screen, sidebar, cart)
-config.py                           All settings in one place (dataset, model, limits, word lists)
-data/ecommerce_products_1000.csv    The product catalog (1,000 products)
+### Deploy Frontend to Vercel (0s Cold Start):
+1. Import `ramashishmaurya/shopping_assistance` on [vercel.com](https://vercel.com).
+2. Set **Root Directory** to `frontend`.
+3. Click **Deploy**.
 
-rag/                                The RAG pipeline
-  ingestion/product_ingestion.py      Reads and checks the CSV; makes one text per product
-  embeddings/embedding_model.py       Loads the embedding model (all-MiniLM-L6-v2)
-  vectorstore/faiss_manager.py        Builds, saves and loads the FAISS search index
-  retrieval/product_retriever.py      Finds relevant products and ranks them
-  retrieval/product_filter.py         Applies price, brand, colour, size… filters exactly
-  llm/llm_factory.py                  Connects to Groq or OpenAI
-  llm/system_prompt.py                Builds the AI prompt and checks the AI reply for invented facts
-
-chatbot/                            The chatbot logic
-  intent_detector.py                  Understands the message (what the user wants + filters)
-  shopping_assistant.py               Decides what to do and builds the reply
-  conversation_manager.py             Keeps the chat history
-
-components/                         Parts of the screen
-  product_cards.py                    Product cards and the carousel
-  shopping_cart.py                    The cart (stock limits, size and colour)
-  category_buttons.py                 Category and suggestion buttons
-
-utils/helpers.py                    Small helpers (₹ formatting, text matching)
-```
+### Deploy Backend to Render:
+1. Create a new **Web Service** on [render.com](https://render.com).
+2. Connect this repository with settings:
+   - **Build Command:** `pip install -r requirements.txt`
+   - **Start Command:** `uvicorn backend.main:app --host 0.0.0.0 --port $PORT`
+   - **Environment Variables:** `PYTHON_VERSION=3.11.9`
+3. Click **Deploy Web Service**.
 
 ---
 
-## Tech stack
-
-| Part | Tool |
-|---|---|
-| Web app | Streamlit |
-| Data and filters | Pandas |
-| Embeddings | HuggingFace `sentence-transformers/all-MiniLM-L6-v2` |
-| Vector search | FAISS |
-| AI models | Groq (free mode) and OpenAI (paid mode) via LangChain |
-| Language | Python 3.11 |
-
----
-
-## Known limitations
-
-- **Free-form questions.** Questions written without product words, like *"something to listen
-  to music"*, often return no results. The search works best when the message names a product
-  type, brand or feature.
-- **Parsing rules and word lists.** Message understanding uses rules and word lists, so very
-  unusual wording or spelling mistakes may not be understood.
-- **One size and colour per product in the cart.** To change them, remove the product and add it again.
+## 🔒 Grounded AI Guarantee
+The search engine strictly dictates which products are shown. The LLM only formats conversational responses, and an ungrounded claim filter ensures no fake prices, hallucinated specs, or imaginary products are ever displayed.
