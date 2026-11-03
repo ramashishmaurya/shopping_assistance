@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ShopMind AI Side Panel</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="sidepanel.css">
+</head>
+<body>
+  <div class="panel-container">
+    <!-- Header -->
+    <header class="panel-header">
+      <div class="brand">
+        <span class="logo-emoji">🛍️</span>
+        <div class="brand-text">
+          <h2>Shop<span>Mind</span> AI</h2>
+          <span class="subtext" id="backendStatus">Connecting…</span>
+        </div>
+      </div>
+      <div class="header-actions">
+        <button class="icon-btn" id="btnRefresh" title="Rescan page">🔄</button>
+        <button class="icon-btn" id="btnSettings" title="Settings">⚙️</button>
+      </div>
+    </header>
+
+    <!-- Product Detection Card -->
+    <section class="detected-product-card" id="productCard">
+      <div class="product-badge" id="productStoreBadge">Detecting product…</div>
+      <h3 class="product-title" id="productTitle">Open any product page on Amazon, Flipkart, etc.</h3>
+      <div class="product-meta">
+        <span class="product-price" id="productPrice">--</span>
+        <span class="product-rating" id="productRating">--</span>
+      </div>
+    </section>
+
+    <!-- AI Verdict & Deal Score -->
+    <section class="ai-verdict-section" id="verdictSection" style="display: none;">
+      <div class="score-card">
+        <div class="score-dial" id="scoreDial">
+          <span class="score-val" id="scoreValue">85</span>
+          <span class="score-label">DEAL SCORE</span>
+        </div>
+        <div class="verdict-info">
+          <div class="verdict-tag" id="verdictTag">Recommended Buy</div>
+          <p class="verdict-summary" id="verdictSummary">Analyzed specs & customer sentiments.</p>
+        </div>
+      </div>
+
+      <!-- Pros and Cons -->
+      <div class="pros-cons-grid">
+        <div class="pro-con-box pros-box">
+          <h4>✅ Key Highlights</h4>
+          <ul id="prosList"></ul>
+        </div>
+        <div class="pro-con-box cons-box">
+          <h4>⚠️ Watch Out</h4>
+          <ul id="consList"></ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- RAG Catalog Alternatives -->
+    <section class="alternatives-section" id="alternativesSection" style="display: none;">
+      <div class="section-title">
+        <span>✨ Similar Catalog Alternatives</span>
+        <small id="alternativesCount">4 found</small>
+      </div>
+      <div class="alternatives-carousel" id="alternativesList"></div>
+    </section>
+
+    <!-- Chat with Copilot -->
+    <section class="copilot-chat-section">
+      <div class="section-title">
+        <span>💬 Ask AI about this product</span>
+      </div>
+      
+      <div class="suggested-questions" id="suggestedQuestions"></div>
+
+      <div class="chat-history" id="chatHistory">
+        <!-- Chat bubbles rendered here -->
+      </div>
+
+      <form class="chat-input-row" id="chatForm">
+        <input 
+          type="text" 
+          id="chatInput" 
+          placeholder="Ask: 'Is this good for running?' or 'Compare with...'"
+          autocomplete="off"
+          required
+        >
+        <button type="submit" id="btnSend">➤</button>
+      </form>
+    </section>
+
+    <!-- Settings Drawer -->
+    <div class="settings-drawer" id="settingsDrawer">
+      <div class="settings-header">
+        <h4>⚙️ Extension Settings</h4>
+        <button class="close-btn" id="btnCloseSettings">&times;</button>
+      </div>
+      <div class="settings-body">
+        <label for="backendUrl">Backend API URL</label>
+        <input type="text" id="backendUrl" placeholder="http://127.0.0.1:8000 or Render URL">
+        <small>Point this to your local server or Render URL.</small>
+
+        <label for="groqKey" style="margin-top: 12px">Groq API Key (Optional)</label>
+        <input type="password" id="groqKey" placeholder="gsk_...">
+        <small>For custom fast LLM model answers.</small>
+
+        <button class="btn-save" id="btnSaveSettings">Save & Reconnect</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="sidepanel.js"></script>
+</body>
+</html>

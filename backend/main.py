@@ -150,6 +150,17 @@ class AddToCartRequest(BaseModel):
     session_id: Optional[str] = None
 
 
+class ProductAnalysisRequest(BaseModel):
+    title: str
+    price: Optional[str] = None
+    rating: Optional[str] = None
+    review_count: Optional[str] = None
+    description: Optional[str] = None
+    reviews: Optional[List[str]] = None
+    url: Optional[str] = None
+    api_key: Optional[str] = None
+
+
 # --------------------------------------------------------------------------- Endpoints
 @app.get("/api/health")
 def health_check():
@@ -321,6 +332,79 @@ def chat(req: ChatRequest):
             "variants": cart.variants,
             "total_count": sum(cart.items.values()),
         },
+    }
+
+
+@app.post("/api/analyze-product")
+def analyze_product(req: ProductAnalysisRequest):
+    df = PIPELINE["df"]
+    retriever: ProductRetriever = PIPELINE["retriever"]
+
+    # 1. Use semantic retrieval to find similar alternatives from catalog
+    query = req.title
+    try:
+        retrieval_res = retriever.retrieve(query, SearchFilters())
+        alternatives = [
+            serialize_product(row)
+            for _, row in retrieval_res.products.head(4).iterrows()
+        ]
+    except Exception:
+        alternatives = []
+
+    # 2. Rating & Review Sentiment Analysis
+    rating_val = 0.0
+    if req.rating:
+        match = re.search(r"(\d+(?:\.\d+)?)", str(req.rating))
+        if match:
+            rating_val = float(match.group(1))
+
+    # Review pros & cons
+    pros = []
+    cons = []
+    reviews_text = " ".join(req.reviews or [])
+    
+    if rating_val >= 4.0:
+        pros.append(f"Highly rated ({rating_val} / 5.0) with strong customer satisfaction.")
+    elif rating_val > 0:
+        cons.append(f"Mixed ratings ({rating_val} / 5.0) — check recent reviews carefully.")
+
+    # Keyword checks from reviews/description
+    pos_words = ["good", "great", "comfortable", "durable", "excellent", "worth", "quality", "fast", "battery", "recommend"]
+    neg_words = ["bad", "poor", "broken", "cheap", "waste", "tight", "damaged", "fake", "slow", "defect", "worst"]
+
+    pos_hits = [w for w in pos_words if w in reviews_text.lower() or w in (req.description or "").lower()]
+    neg_hits = [w for w in neg_words if w in reviews_text.lower() or w in (req.description or "").lower()]
+
+    if pos_hits:
+        pros.append(f"Customers praise: {', '.join(set(pos_hits[:4]))}.")
+    if neg_hits:
+        cons.append(f"Common customer complaints: {', '.join(set(neg_hits[:4]))}.")
+    
+    if not pros:
+        pros.append("Popular brand and standard build specifications.")
+    if not cons:
+        cons.append("Price may fluctuate; check return window before ordering.")
+
+    # Verdict & Deal Score
+    deal_score = min(95, max(50, int(rating_val * 18 + len(pos_hits) * 3 - len(neg_hits) * 4))) if rating_val > 0 else 75
+    verdict = "Recommended Buy ✅" if deal_score >= 75 else "Consider with Caution ⚠️"
+
+    title_words = req.title.split()[:3]
+    short_title = " ".join(title_words)
+
+    return {
+        "title": req.title,
+        "deal_score": deal_score,
+        "verdict": verdict,
+        "pros": pros,
+        "cons": cons,
+        "rating": rating_val,
+        "alternatives": alternatives,
+        "suggested_questions": [
+            f"Is {short_title} worth the price?",
+            f"Are there cheaper options under ₹3,000?",
+            f"Compare {short_title} with alternatives"
+        ]
     }
 
 
