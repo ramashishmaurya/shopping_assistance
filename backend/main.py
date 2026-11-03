@@ -13,7 +13,7 @@ import math
 import os
 import uuid
 from contextlib import asynccontextmanager
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
 
 import pandas as pd
 from fastapi import FastAPI, HTTPException, Query
@@ -42,6 +42,7 @@ from rag.retrieval.product_filter import SearchFilters, apply_filters, sort_prod
 from rag.retrieval.product_retriever import ProductRetriever
 from rag.vectorstore.faiss_manager import FaissManager
 from utils.helpers import file_fingerprint
+from backend.agents import ProductAnalyzerAgent, ProductComparatorAgent, ShoppingAdvisorAgent
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 logger = logging.getLogger("backend")
@@ -84,12 +85,18 @@ async def lifespan(app: FastAPI):
     retriever = ProductRetriever(df, faiss_mgr)
     detector = IntentDetector(df)
     assistant = ShoppingAssistant(df, retriever, detector)
+    analyzer = ProductAnalyzerAgent(retriever)
+    comparator = ProductComparatorAgent(df)
+    advisor = ShoppingAdvisorAgent(df, retriever, detector)
 
     PIPELINE["df"] = df
     PIPELINE["faiss"] = faiss_mgr
     PIPELINE["retriever"] = retriever
     PIPELINE["detector"] = detector
     PIPELINE["assistant"] = assistant
+    PIPELINE["analyzer"] = analyzer
+    PIPELINE["comparator"] = comparator
+    PIPELINE["advisor"] = advisor
     logger.info("Shopping Assistant backend initialized with %d products.", len(df))
     yield
     PIPELINE.clear()
@@ -152,9 +159,10 @@ class AddToCartRequest(BaseModel):
 
 class ProductAnalysisRequest(BaseModel):
     title: str
-    price: Optional[str] = None
-    rating: Optional[str] = None
-    review_count: Optional[str] = None
+    price: Optional[Union[str, float]] = None
+    original_price: Optional[Union[str, float]] = None
+    rating: Optional[Union[str, float]] = None
+    review_count: Optional[Union[str, int]] = None
     description: Optional[str] = None
     reviews: Optional[List[str]] = None
     url: Optional[str] = None
@@ -337,78 +345,38 @@ def chat(req: ChatRequest):
 
 @app.post("/api/analyze-product")
 def analyze_product(req: ProductAnalysisRequest):
-    df = PIPELINE["df"]
-    retriever: ProductRetriever = PIPELINE["retriever"]
+    analyzer: ProductAnalyzerAgent = PIPELINE.get("analyzer")
+    if not analyzer:
+        analyzer = ProductAnalyzerAgent(PIPELINE.get("retriever"))
 
-    # 1. Use semantic retrieval to find similar alternatives from catalog
-    query = req.title
-    try:
-        retrieval_res = retriever.retrieve(query, SearchFilters())
-        alternatives = [
-            serialize_product(row)
-            for _, row in retrieval_res.products.head(4).iterrows()
-        ]
-    except Exception:
-        alternatives = []
+    def parse_num(val):
+        if val is None:
+            return 0.0
+        if isinstance(val, (int, float)):
+            return float(val)
+        clean = "".join(c for c in str(val) if c.isdigit() or c == ".")
+        try:
+            return float(clean)
+        except ValueError:
+            return 0.0
 
-    # 2. Rating & Review Sentiment Analysis
-    rating_val = 0.0
-    if req.rating:
-        match = re.search(r"(\d+(?:\.\d+)?)", str(req.rating))
-        if match:
-            rating_val = float(match.group(1))
-
-    # Review pros & cons
-    pros = []
-    cons = []
-    reviews_text = " ".join(req.reviews or [])
-    
-    if rating_val >= 4.0:
-        pros.append(f"Highly rated ({rating_val} / 5.0) with strong customer satisfaction.")
-    elif rating_val > 0:
-        cons.append(f"Mixed ratings ({rating_val} / 5.0) — check recent reviews carefully.")
-
-    # Keyword checks from reviews/description
-    pos_words = ["good", "great", "comfortable", "durable", "excellent", "worth", "quality", "fast", "battery", "recommend"]
-    neg_words = ["bad", "poor", "broken", "cheap", "waste", "tight", "damaged", "fake", "slow", "defect", "worst"]
-
-    pos_hits = [w for w in pos_words if w in reviews_text.lower() or w in (req.description or "").lower()]
-    neg_hits = [w for w in neg_words if w in reviews_text.lower() or w in (req.description or "").lower()]
-
-    if pos_hits:
-        pros.append(f"Customers praise: {', '.join(set(pos_hits[:4]))}.")
-    if neg_hits:
-        cons.append(f"Common customer complaints: {', '.join(set(neg_hits[:4]))}.")
-    
-    if not pros:
-        pros.append("Popular brand and standard build specifications.")
-    if not cons:
-        cons.append("Price may fluctuate; check return window before ordering.")
-
-    # Verdict & Deal Score
-    deal_score = min(95, max(50, int(rating_val * 18 + len(pos_hits) * 3 - len(neg_hits) * 4))) if rating_val > 0 else 75
-    verdict = "Recommended Buy ✅" if deal_score >= 75 else "Consider with Caution ⚠️"
-
-    title_words = req.title.split()[:3]
-    short_title = " ".join(title_words)
-
-    return {
-        "title": req.title,
-        "deal_score": deal_score,
-        "verdict": verdict,
-        "pros": pros,
-        "cons": cons,
-        "rating": rating_val,
-        "alternatives": alternatives,
-        "suggested_questions": [
-            f"Is {short_title} worth the price?",
-            f"Are there cheaper options under ₹3,000?",
-            f"Compare {short_title} with alternatives"
-        ]
-    }
+    analysis = analyzer.analyze(
+        title=req.title,
+        price=parse_num(req.price),
+        original_price=parse_num(req.original_price),
+        rating_raw=req.rating,
+        reviews=req.reviews,
+        description=req.description or "",
+        serialize_func=serialize_product
+    )
+    return analysis
 
 
-# Serve static frontend if directory exists
+# Serve static React frontend bundle if dist or frontend directory exists
 frontend_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "frontend")
-if os.path.exists(frontend_path):
+dist_path = os.path.join(frontend_path, "dist")
+
+if os.path.exists(dist_path):
+    app.mount("/", StaticFiles(directory=dist_path, html=True), name="frontend")
+elif os.path.exists(frontend_path):
     app.mount("/", StaticFiles(directory=frontend_path, html=True), name="frontend")

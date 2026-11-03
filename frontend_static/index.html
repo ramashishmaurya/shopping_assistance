@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI Shopping Assistant — RAG-Powered Product Discovery</title>
+  <meta name="description" content="AI Shopping Assistant powered by RAG, FAISS vector search, and Groq LLM. Search 1,000+ products with natural language, compare items, and shop seamlessly.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <!-- Top Navigation Header -->
+  <header class="app-header" id="appHeader">
+    <div class="header-container">
+      <div class="brand-section">
+        <div class="brand-logo">
+          <span class="logo-icon">🛍️</span>
+        </div>
+        <div class="brand-info">
+          <h1 class="brand-title">Shop<span>Mind</span> AI</h1>
+          <span class="brand-tagline">Grounded Catalog Assistant</span>
+        </div>
+      </div>
+
+      <div class="header-status">
+        <div class="status-indicator online" id="statusIndicator" title="Backend Connection Status">
+          <span class="status-dot"></span>
+          <span class="status-text" id="statusText">Connecting…</span>
+        </div>
+      </div>
+
+      <div class="header-actions">
+        <button class="nav-btn" id="btnToggleFilters" aria-label="Toggle Filters">
+          <span class="btn-icon">⚡</span>
+          <span class="btn-label">Catalog</span>
+        </button>
+        <button class="nav-btn" id="btnOpenCompare" aria-label="Open Compare Modal">
+          <span class="btn-icon">⚖️</span>
+          <span class="btn-label">Compare</span>
+          <span class="badge" id="compareCountBadge">0</span>
+        </button>
+        <button class="nav-btn cart-btn" id="btnOpenCart" aria-label="Open Cart Drawer">
+          <span class="btn-icon">🛒</span>
+          <span class="btn-label">Cart</span>
+          <span class="badge" id="cartCountBadge">0</span>
+        </button>
+        <button class="nav-btn icon-only theme-btn" id="btnThemeToggle" aria-label="Toggle Theme" title="Switch Light/Dark Mode">
+          <span class="btn-icon" id="themeIcon">☀️</span>
+        </button>
+        <button class="nav-btn icon-only" id="btnOpenSettings" aria-label="Settings" title="API Settings">
+          <span class="btn-icon">⚙️</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Application Body -->
+  <main class="app-layout">
+    <!-- Collapsible Filter Sidebar -->
+    <aside class="filter-sidebar" id="filterSidebar">
+      <div class="sidebar-header">
+        <h3>🔎 Catalog Filters</h3>
+        <button class="icon-close" id="btnCloseSidebar" aria-label="Close Sidebar">&times;</button>
+      </div>
+
+      <div class="filter-section">
+        <label for="filterCategory">Category</label>
+        <select id="filterCategory" class="form-select">
+          <option value="">All Categories</option>
+        </select>
+      </div>
+
+      <div class="filter-section">
+        <label for="filterSubcategory">Subcategory</label>
+        <select id="filterSubcategory" class="form-select" disabled>
+          <option value="">All Subcategories</option>
+        </select>
+      </div>
+
+      <div class="filter-section">
+        <div class="range-header">
+          <label for="priceMaxSlider">Budget Cap (₹)</label>
+          <span class="range-val" id="priceDisplay">Any Price</span>
+        </div>
+        <input type="range" id="priceMaxSlider" min="0" max="80000" step="500" value="80000" class="form-range">
+      </div>
+
+      <div class="filter-section">
+        <label>Minimum Rating</label>
+        <div class="rating-pills" id="ratingPills">
+          <button class="pill-btn active" data-rating="0">Any</button>
+          <button class="pill-btn" data-rating="3">3★+</button>
+          <button class="pill-btn" data-rating="4">4★+</button>
+          <button class="pill-btn" data-rating="4.5">4.5★+</button>
+        </div>
+      </div>
+
+      <div class="filter-section">
+        <label class="checkbox-label">
+          <input type="checkbox" id="filterInStockOnly" checked>
+          <span>In Stock Only</span>
+        </label>
+      </div>
+
+      <div class="sidebar-actions">
+        <button class="btn btn-primary btn-block" id="btnApplySidebarSearch">Browse Products</button>
+        <button class="btn btn-secondary btn-block" id="btnResetFilters">Reset Filters</button>
+      </div>
+    </aside>
+
+    <!-- Center Chat & Results Container -->
+    <section class="chat-viewport">
+      <div class="messages-container" id="messagesContainer">
+        <!-- Welcome Hero Card -->
+        <div class="message-card assistant welcome-hero">
+          <div class="msg-avatar">🛍️</div>
+          <div class="msg-content">
+            <h2 class="welcome-title">Welcome to <span>ShopMind AI</span></h2>
+            <p class="welcome-desc">
+              Your grounded AI shopping companion. Search across <strong>1,000 verified catalog products</strong>
+              using everyday language. Ask for recommendations, filter by price, compare specs, and checkout.
+            </p>
+            <div class="quick-prompts">
+              <span class="prompts-label">Try asking:</span>
+              <div class="prompt-chips">
+                <button class="chip-btn" data-prompt="comfortable running shoes under 3000">👟 Running shoes under ₹3k</button>
+                <button class="chip-btn" data-prompt="laptops between 30k and 60k">💻 Laptops ₹30k–₹60k</button>
+                <button class="chip-btn" data-prompt="show me black or blue formal shirts">👔 Formal shirts</button>
+                <button class="chip-btn" data-prompt="noise cancelling wireless headphones">🎧 Wireless headphones</button>
+              </div>
+            </div>
+          </div>
+        </div>
+        <!-- Dynamic chat history rendered here -->
+      </div>
+
+      <!-- Bottom Chat Bar -->
+      <div class="chat-input-bar">
+        <form id="chatForm" class="chat-form">
+          <div class="input-wrapper">
+            <input 
+              type="text" 
+              id="chatInput" 
+              class="chat-input" 
+              placeholder="Ask about anything, e.g. “casual shoes upto 5k” or “compare top 3”…"
+              autocomplete="off"
+              required
+            >
+            <button type="submit" class="btn-send" id="btnSend" aria-label="Send message">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="22" y1="2" x2="11" y2="13"></line>
+                <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+              </svg>
+            </button>
+          </div>
+        </form>
+        <div class="input-footer">
+          <span class="footer-tip">Powered by FAISS Vector Similarity & Semantic Metadata Ranking</span>
+          <button class="btn-clear-chat" id="btnClearChat" title="Clear chat history">Clear Chat</button>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- Slide-out Cart Drawer -->
+  <div class="drawer-overlay" id="cartOverlay">
+    <aside class="cart-drawer" id="cartDrawer" role="dialog" aria-modal="true" aria-label="Shopping Cart">
+      <div class="drawer-header">
+        <div class="drawer-title">
+          <h3>Your Shopping Cart</h3>
+          <span class="drawer-subtitle" id="cartItemCountText">0 items</span>
+        </div>
+        <button class="icon-close" id="btnCloseCart" aria-label="Close Cart">&times;</button>
+      </div>
+
+      <div class="drawer-body" id="cartItemsList">
+        <!-- Rendered dynamically -->
+      </div>
+
+      <div class="drawer-footer" id="cartFooter">
+        <div class="summary-line">
+          <span>Subtotal</span>
+          <span id="cartSubtotal">₹0</span>
+        </div>
+        <div class="summary-line">
+          <span>Discount Savings</span>
+          <span class="discount-savings" id="cartSavings">-₹0</span>
+        </div>
+        <div class="summary-line total-line">
+          <span>Total Payable</span>
+          <span class="total-amount" id="cartTotal">₹0</span>
+        </div>
+        <button class="btn btn-primary btn-block btn-checkout" id="btnCheckout">
+          Proceed to Checkout 🛍️
+        </button>
+      </div>
+    </aside>
+  </div>
+
+  <!-- Comparison Modal -->
+  <div class="modal-backdrop" id="compareModal">
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <h3>⚖️ Product Comparison</h3>
+        <button class="icon-close" id="btnCloseCompare" aria-label="Close Comparison">&times;</button>
+      </div>
+      <div class="modal-body" id="compareModalBody">
+        <!-- Comparison table rendered here -->
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" id="btnClearCompare">Clear Selected</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Variant Selection Modal (Size / Color) -->
+  <div class="modal-backdrop" id="variantModal">
+    <div class="modal-dialog modal-sm">
+      <div class="modal-header">
+        <h3 id="variantModalTitle">Select Variant</h3>
+        <button class="icon-close" id="btnCloseVariant" aria-label="Close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="variant-field" id="variantSizeSection">
+          <label>Select Size:</label>
+          <div class="variant-options" id="variantSizes"></div>
+        </div>
+        <div class="variant-field" id="variantColorSection">
+          <label>Select Colour:</label>
+          <div class="variant-options" id="variantColors"></div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-primary btn-block" id="btnConfirmAddToCart">Add to Cart</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Settings Modal (Backend URL / API Keys) -->
+  <div class="modal-backdrop" id="settingsModal">
+    <div class="modal-dialog modal-sm">
+      <div class="modal-header">
+        <h3>⚙️ Assistant Settings</h3>
+        <button class="icon-close" id="btnCloseSettings" aria-label="Close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="filter-section">
+          <label for="settingBackendUrl">Backend API URL</label>
+          <input type="text" id="settingBackendUrl" class="form-input" placeholder="http://localhost:8000 or Render URL">
+          <small class="helper-text">Point this to your hosted Render backend (e.g. <code>https://shopping-assistance.onrender.com</code>) or local server.</small>
+        </div>
+        <div class="filter-section">
+          <label for="settingGroqKey">Groq API Key (Optional)</label>
+          <input type="password" id="settingGroqKey" class="form-input" placeholder="gsk_...">
+          <small class="helper-text">For custom fast AI answers with Groq models.</small>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-primary btn-block" id="btnSaveSettings">Save & Connect</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Notification Container -->
+  <div class="toast-container" id="toastContainer"></div>
+
+  <script src="app.js"></script>
+</body>
+</html>
