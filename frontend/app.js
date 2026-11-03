@@ -13,7 +13,8 @@ const state = {
   compareIds: JSON.parse(localStorage.getItem("shopmind_compare_ids") || '[]'),
   catalog: null,
   activePendingProduct: null,
-  selectedVariant: { size: null, colour: null }
+  selectedVariant: { size: null, colour: null },
+  theme: localStorage.getItem("shopmind_theme") || (window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark")
 };
 
 // DOM Elements
@@ -74,6 +75,10 @@ const el = {
   settingGroqKey: document.getElementById("settingGroqKey"),
   btnSaveSettings: document.getElementById("btnSaveSettings"),
 
+  // Theme Toggle
+  btnThemeToggle: document.getElementById("btnThemeToggle"),
+  themeIcon: document.getElementById("themeIcon"),
+
   // Toasts
   toastContainer: document.getElementById("toastContainer")
 };
@@ -83,12 +88,38 @@ const el = {
 // ============================================================================
 document.addEventListener("DOMContentLoaded", () => {
   localStorage.setItem("shopmind_session_id", state.sessionId);
+  initTheme();
   updateCartBadges();
   updateCompareBadges();
   bindEvents();
   checkBackendHealth();
   loadCategories();
 });
+
+// ============================================================================
+// Theme Management (Dark & Light Mode)
+// ============================================================================
+function initTheme() {
+  document.documentElement.setAttribute("data-theme", state.theme);
+  updateThemeIcon();
+}
+
+function toggleTheme() {
+  state.theme = state.theme === "dark" ? "light" : "dark";
+  document.documentElement.setAttribute("data-theme", state.theme);
+  localStorage.setItem("shopmind_theme", state.theme);
+  updateThemeIcon();
+  showToast(`Switched to ${state.theme === "dark" ? "🌙 Dark" : "☀️ Light"} mode`, "info");
+}
+
+function updateThemeIcon() {
+  if (el.themeIcon) {
+    el.themeIcon.textContent = state.theme === "dark" ? "☀️" : "🌙";
+    if (el.btnThemeToggle) {
+      el.btnThemeToggle.setAttribute("title", `Switch to ${state.theme === "dark" ? "Light" : "Dark"} Mode`);
+    }
+  }
+}
 
 // ============================================================================
 // Event Handlers & Binding
@@ -239,6 +270,11 @@ function bindEvents() {
     checkBackendHealth();
     loadCategories();
   });
+
+  // Theme Toggle Button
+  if (el.btnThemeToggle) {
+    el.btnThemeToggle.addEventListener("click", toggleTheme);
+  }
 }
 
 // ============================================================================
