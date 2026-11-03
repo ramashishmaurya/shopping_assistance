@@ -2,8 +2,7 @@
 .env
 .streamlit/secrets.toml
 
-# Generated FAISS index (rebuilt automatically from the CSV)
-rag/vectorstore/faiss_index/
+# Temporary FAISS build directory
 rag/vectorstore/faiss_index_tmp/
 
 # Python
